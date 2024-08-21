@@ -315,7 +315,7 @@ void CDiscAdjMultizoneDriver::Run() {
 
   const auto zeroGrad = EvaluateObjectiveFunctionGradient();
 
-  if (zeroGrad && !time_domain) {
+  if (zeroGrad && !time_domain && config_container[ZONE_0]->GetKind_ObjFunc() != CUSTOM_OBJFUNC) {
     if (rank == MASTER_NODE) {
       cout << "\nThe gradient of the objective function is numerically 0.";
       cout << "\nThis implies that the adjoint variables are also 0.\n\n";
@@ -464,7 +464,7 @@ void CDiscAdjMultizoneDriver::Run() {
 bool CDiscAdjMultizoneDriver::EvaluateObjectiveFunctionGradient() {
 
   /*--- Evaluate the objective function gradient w.r.t. the solutions of all zones. ---*/
-
+  
   SetRecording(RECORDING::CLEAR_INDICES, Kind_Tape::OBJECTIVE_FUNCTION_TAPE, ZONE_0);
   SetRecording(RECORDING::SOLUTION_VARIABLES, Kind_Tape::OBJECTIVE_FUNCTION_TAPE, ZONE_0);
   RecordingState = RECORDING::CLEAR_INDICES;
@@ -476,19 +476,57 @@ bool CDiscAdjMultizoneDriver::EvaluateObjectiveFunctionGradient() {
   /*--- Initialize External with the objective function gradient. ---*/
 
   su2double rhs_norm = 0.0;
+  std::vector<std::vector<double>> custom_djdu_grad;
+
+  if (config_container[ZONE_0]->GetKind_ObjFunc() == CUSTOM_OBJFUNC) {
+    std::ifstream infile("del_J__del_U_autodiff.csv");
+    if (!infile) {
+        throw std::runtime_error("Gradient file not found");
+    }
+    std::string line;
+    while (std::getline(infile, line)) {
+        std::stringstream ss(line);
+        std::vector<double> gradient_row(5); 
+        for (int i = 0; i < 5; ++i) {
+            ss >> gradient_row[i];
+            if (ss.peek() == ',') ss.ignore();
+        }
+        custom_djdu_grad.push_back(gradient_row);
+    }
+  }
 
   for (iZone = 0; iZone < nZone; iZone++) {
-
-    iteration_container[iZone][INST_0]->IterateDiscAdj(geometry_container, solver_container,
+    for (unsigned short iSol = 0; iSol < MAX_SOLS; iSol++) {
+      auto solver = solver_container[iZone][INST_0][MESH_0][iSol];
+      iteration_container[iZone][INST_0]->IterateDiscAdj(geometry_container, solver_container,
                                                        config_container, iZone, INST_0, false);
+
+      if (solver && solver->GetAdjoint()) {
+
+        const auto nPoint = geometry_container[iZone][INST_0][MESH_0]->GetnPoint();
+        if (config_container[ZONE_0]->GetKind_ObjFunc() == CUSTOM_OBJFUNC) {
+            for (unsigned long iPoint = 0; iPoint < nPoint; iPoint++) {
+              auto global_index = geometry_container[iZone][INST_0][MESH_0]->nodes->GetGlobalIndex(iPoint);
+              for (unsigned short iVar = 0; iVar < 5; ++iVar) {
+                double custom_djdu = custom_djdu_grad[global_index][iVar];
+                solver->AddCustomGradient(iPoint, iVar, custom_djdu);  
+              }
+            }
+        } 
+      }
+    }
+
     AddSolutionToExternal(iZone);
 
-    for (unsigned short iSol=0; iSol < MAX_SOLS; iSol++) {
+    for (unsigned short iSol = 0; iSol < MAX_SOLS; iSol++) {
       auto solver = solver_container[iZone][INST_0][MESH_0][iSol];
-      if (solver && solver->GetAdjoint())
-        for (unsigned short iVar=0; iVar < solver->GetnVar(); ++iVar)
+      if (solver && solver->GetAdjoint()) {
+        for (unsigned short iVar = 0; iVar < solver->GetnVar(); ++iVar) {
           rhs_norm += solver->GetRes_RMS(iVar);
+        }
+      }
     }
+  cout << "Residual norm after zone " << iZone << " is: " << rhs_norm << endl;
   }
 
   return rhs_norm < EPS;
@@ -720,7 +758,11 @@ void CDiscAdjMultizoneDriver::SetObjFunction(RECORDING kind_recording) {
 
       case MAIN_SOLVER::DISC_ADJ_EULER:     case MAIN_SOLVER::DISC_ADJ_NAVIER_STOKES:     case MAIN_SOLVER::DISC_ADJ_RANS:
       case MAIN_SOLVER::DISC_ADJ_INC_EULER: case MAIN_SOLVER::DISC_ADJ_INC_NAVIER_STOKES: case MAIN_SOLVER::DISC_ADJ_INC_RANS:
-
+      
+      if (config_container[ZONE_0]->GetKind_ObjFunc()==CUSTOM_OBJFUNC ){
+        break;
+      }
+        
         solvers[FLOW_SOL]->Pressure_Forces(geometry, config);
         solvers[FLOW_SOL]->Momentum_Forces(geometry, config);
         solvers[FLOW_SOL]->Friction_Forces(geometry, config);
