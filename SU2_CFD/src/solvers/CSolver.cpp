@@ -2204,6 +2204,14 @@ void CSolver::Add_Solution_To_External() {
   base_nodes->Set_ExternalExtra_To_SolutionExtra();
 }
 
+void CSolver::AddCustomGradient(unsigned long iPoint, unsigned short iVar, double custom_djdu) {
+  su2double val_sol[5]; // 5 Conservative Variables
+  for (unsigned short i = 0; i < 5; ++i) {
+    val_sol[i] = (i == iVar) ? custom_djdu : 0.0;
+  }
+  base_nodes->Add_External(iPoint, val_sol);
+}
+
 void CSolver::Update_Cross_Term(CConfig *config, su2passivematrix &cross_term) {
 
   /*--- This method is for discrete adjoint solvers and it is used in multi-physics
