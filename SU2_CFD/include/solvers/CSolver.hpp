@@ -209,6 +209,8 @@ public:
   std::unique_ptr<CAROM::BasisGenerator> u_basis_generator;
 #endif
 
+  void AddCustomGradient(unsigned long iPoint, unsigned short iVar, double custom_djdu);
+
   /*!
    * \brief Constructor of the class.
    */
