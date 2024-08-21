@@ -491,6 +491,26 @@ void CDiscAdjSolver::SetSensitivity(CGeometry *geometry, CConfig *config, CSolve
 
   AD::BeginUseAdjoints();
 
+  std::vector<std::vector<double>> custom_djdx_grad;
+
+  if (config->GetKind_ObjFunc() == CUSTOM_OBJFUNC) {
+    cout << "Reading Gradients W.R.T Mesh Coordinates from del_J__del_X_autodiff.csv" << endl;
+    std::ifstream infile("del_J__del_X_autodiff.csv"); 
+    if (!infile) {
+      throw std::runtime_error("Gradient file not found");
+    }
+    std::string line;
+    while (std::getline(infile, line)) {
+      std::stringstream ss(line);
+      std::vector<double> gradient_row(3); // 3 = x, y, z 
+      for (int i = 0; i < 3; ++i) {
+        ss >> gradient_row[i];
+        if (ss.peek() == ',') ss.ignore();
+      }
+      custom_djdx_grad.push_back(gradient_row);
+    }
+  }
+  
   SU2_OMP_PARALLEL {
 
   const bool time_stepping = (config->GetTime_Marching() != TIME_MARCHING::STEADY);
@@ -511,6 +531,15 @@ void CDiscAdjSolver::SetSensitivity(CGeometry *geometry, CConfig *config, CSolve
       if (config->GetSens_Remove_Sharp() && geometry->nodes->GetSharpEdge_Distance(iPoint) < eps) {
         Sensitivity = 0.0;
       }
+
+      if(config->GetKind_ObjFunc() == CUSTOM_OBJFUNC) {
+        auto global_index = geometry->nodes->GetGlobalIndex(iPoint);
+        if (global_index < custom_djdx_grad.size()) {
+          double custom_djdx_grad[global_index][iDim];
+          Sensitivity += custom_djdx;
+        }
+      }
+      
       if (!time_stepping) {
         nodes->SetSensitivity(iPoint,iDim, Sensitivity);
       } else {
