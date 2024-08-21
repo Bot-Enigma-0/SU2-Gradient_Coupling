@@ -535,7 +535,7 @@ void CDiscAdjSolver::SetSensitivity(CGeometry *geometry, CConfig *config, CSolve
       if(config->GetKind_ObjFunc() == CUSTOM_OBJFUNC) {
         auto global_index = geometry->nodes->GetGlobalIndex(iPoint);
         if (global_index < custom_djdx_grad.size()) {
-          double custom_djdx_grad[global_index][iDim];
+          double custom_djdx = custom_djdx_grad[global_index][iDim];
           Sensitivity += custom_djdx;
         }
       }
