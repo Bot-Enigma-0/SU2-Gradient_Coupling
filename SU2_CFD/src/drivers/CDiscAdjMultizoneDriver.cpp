@@ -526,7 +526,6 @@ bool CDiscAdjMultizoneDriver::EvaluateObjectiveFunctionGradient() {
         }
       }
     }
-  cout << "Residual norm after zone " << iZone << " is: " << rhs_norm << endl;
   }
 
   return rhs_norm < EPS;
