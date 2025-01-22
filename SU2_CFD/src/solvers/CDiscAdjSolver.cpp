@@ -494,7 +494,6 @@ void CDiscAdjSolver::SetSensitivity(CGeometry *geometry, CConfig *config, CSolve
   std::vector<std::vector<double>> custom_djdx_grad;
 
   if (config->GetKind_ObjFunc() == CUSTOM_OBJFUNC) {
-    cout << "Reading Gradients W.R.T Mesh Coordinates from del_J__del_X_autodiff.csv" << endl;
     std::ifstream infile("del_J__del_X_autodiff.csv"); 
     if (!infile) {
       throw std::runtime_error("Gradient file not found");
